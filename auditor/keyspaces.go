@@ -451,7 +451,7 @@ func (a *appAuditor) keyspaces() {
 			if d.Application == nil || d.Application == a.app {
 				continue
 			}
-			clientLat := d.RequestsLatency[model.ProtocolCassandra]
+			clientLat := clientAvgLatency(d, model.ProtocolCassandra)
 			if clientLat.IsEmpty() {
 				continue
 			}
@@ -515,6 +515,23 @@ func formatOptFloat(v float32) string {
 		return "—"
 	}
 	return fmt.Sprintf("%.1f", v)
+}
+
+func clientAvgLatency(d *model.AppToAppConnection, proto model.Protocol) *timeseries.TimeSeries {
+	totalLat := d.RequestsLatency[proto]
+	byStatus := d.RequestsCount[proto]
+	if totalLat.IsEmpty() || len(byStatus) == 0 {
+		return nil
+	}
+	totalReq := timeseries.NewAggregate(timeseries.NanSum)
+	for _, ts := range byStatus {
+		totalReq.Add(ts)
+	}
+	reqTs := totalReq.Get()
+	if reqTs.IsEmpty() {
+		return nil
+	}
+	return timeseries.Div(totalLat, reqTs)
 }
 
 func describeKeyspacesClients(app *model.Application) []string {

@@ -137,4 +137,17 @@ func TestKeyspacesAuditor_MissingDataAndOnDemandAndAllFaults(t *testing.T) {
 	assert.Equal(t, model.WARNING, chUE.Status)
 	assert.Contains(t, chUE.Message, "PREPARE invalid queries (50)")
 	assert.NotContains(t, chUE.Message, "ks.t_prov", "throttles must be subtracted from table UserErrors")
+
+	// Verify clientAvgLatency divides total latency rate by request count rate (not raw total latency)
+	conn := &model.AppToAppConnection{
+		RequestsCount: map[model.Protocol]map[string]*timeseries.TimeSeries{
+			model.ProtocolCassandra: {"ok": timeseries.NewWithData(ctx.From, ctx.Step, []float32{100, 100, 100, 100, 100, 100})},
+		},
+		RequestsLatency: map[model.Protocol]*timeseries.TimeSeries{
+			model.ProtocolCassandra: timeseries.NewWithData(ctx.From, ctx.Step, []float32{20, 20, 20, 20, 20, 20}),
+		},
+	}
+	avgLat := clientAvgLatency(conn, model.ProtocolCassandra)
+	require.NotNil(t, avgLat)
+	assert.InDelta(t, 0.2, float64(avgLat.Last()), 0.001)
 }
