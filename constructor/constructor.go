@@ -147,6 +147,8 @@ func (c *Constructor) loadProjectWorld(ctx context.Context, cache Cache, project
 	prof.stage("load_elasticache_metadata", func() { c.loadElasticacheMetadata(w, metrics, pjs, cloudInstancesById, project) })
 	prof.stage("load_rds", func() { c.loadRds(w, metrics, pjs, cloudInstancesById) })
 	prof.stage("load_elasticache", func() { c.loadElasticache(w, metrics, pjs, cloudInstancesById) })
+	prof.stage("load_keyspaces_metadata", func() { c.loadKeyspacesMetadata(w, metrics, cloudInstancesById, project) })
+	prof.stage("load_keyspaces", func() { c.loadKeyspaces(w, metrics, cloudInstancesById) })
 	prof.stage("load_gcp_metadata", func() { c.loadGCPMetadata(w, metrics, cloudInstancesById, project) })
 	prof.stage("load_gcp", func() { c.loadGCP(w, metrics, pjs, cloudInstancesById) })
 	prof.stage("load_oci_metadata", func() { c.loadOCIMetadata(w, metrics, cloudInstancesById, project) })

@@ -2035,16 +2035,7 @@ func (api *Api) Instrumentation(w http.ResponseWriter, r *http.Request, u *db.Us
 	}
 
 	t := model.ApplicationType(vars["type"]).InstrumentationType()
-	var instrumentation *model.ApplicationInstrumentation
-	if app.Settings != nil && app.Settings.Instrumentation != nil && app.Settings.Instrumentation[t] != nil {
-		instrumentation = app.Settings.Instrumentation[t]
-		if instrumentation.Enabled == nil {
-			instrumentation.Enabled = utils.Ptr(true)
-		}
-	} else {
-		instrumentation = model.GetDefaultInstrumentation(t)
-		instrumentation.Enabled = utils.Ptr(false)
-	}
+	instrumentation := resolveInstrumentation(app, t)
 	if instrumentation == nil {
 		http.Error(w, fmt.Sprintf("unsupported instrumentation type: %s", t), http.StatusBadRequest)
 		return
@@ -2054,6 +2045,21 @@ func (api *Api) Instrumentation(w http.ResponseWriter, r *http.Request, u *db.Us
 		instrumentation.Credentials.Password = "<hidden>"
 	}
 	utils.WriteJson(w, instrumentation)
+}
+
+func resolveInstrumentation(app *model.Application, t model.ApplicationType) *model.ApplicationInstrumentation {
+	if app.Settings != nil && app.Settings.Instrumentation != nil && app.Settings.Instrumentation[t] != nil {
+		instrumentation := app.Settings.Instrumentation[t]
+		if instrumentation.Enabled == nil {
+			instrumentation.Enabled = utils.Ptr(true)
+		}
+		return instrumentation
+	}
+	instrumentation := model.GetDefaultInstrumentation(t)
+	if instrumentation != nil {
+		instrumentation.Enabled = utils.Ptr(false)
+	}
+	return instrumentation
 }
 
 func (api *Api) Profiling(w http.ResponseWriter, r *http.Request, u *db.User) {

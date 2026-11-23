@@ -119,8 +119,15 @@ var Checks = struct {
 	MysqlConnectionErrors      CheckConfig
 	MysqlGaleraReplication     CheckConfig
 	MysqlGroupReplication      CheckConfig
-	MysqlLatency               CheckConfig
-	MysqlBackups               CheckConfig
+	MysqlLatency                CheckConfig
+	MysqlBackups                CheckConfig
+	KeyspacesHotPartition       CheckConfig
+	KeyspacesThrottling         CheckConfig
+	KeyspacesCapacity           CheckConfig
+	KeyspacesPerConnectionLimit CheckConfig
+	KeyspacesLatencyGap         CheckConfig
+	KeyspacesSystemErrors       CheckConfig
+	KeyspacesUserErrors         CheckConfig
 }{
 	index: map[CheckId]*CheckConfig{},
 
@@ -623,6 +630,64 @@ var Checks = struct {
 		Unit:                    CheckUnitSecond,
 		MessageTemplate:         `backups are failing or stale on {{.Items "mysql cluster"}}`,
 		ConditionFormatTemplate: "no successful backup within <threshold>, the last backup failed, or the scheduled backup is overdue",
+	},
+	KeyspacesHotPartition: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeManual,
+		Title:                   "Keyspaces hot partition",
+		DefaultThreshold:        0,
+		MessageTemplate:         `hot partition throttling detected`,
+		ConditionFormatTemplate: "partition throughput capacity exceeded events > <threshold>",
+	},
+	KeyspacesThrottling: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeManual,
+		Title:                   "Keyspaces read/write throttling",
+		DefaultThreshold:        0,
+		MessageTemplate:         `read/write capacity throttling detected`,
+		ConditionFormatTemplate: "table capacity throttle events > <threshold>",
+	},
+	KeyspacesCapacity: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeManual,
+		Title:                   "Keyspaces provisioned capacity",
+		DefaultThreshold:        80,
+		Unit:                    CheckUnitPercent,
+		MessageTemplate:         `approaching provisioned capacity limit`,
+		ConditionFormatTemplate: "consumed capacity > <threshold> of provisioned capacity (provisioned tables only)",
+	},
+	KeyspacesPerConnectionLimit: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeManual,
+		Title:                   "Keyspaces per-connection rate limit",
+		DefaultThreshold:        0,
+		MessageTemplate:         `per-connection request rate exceeded`,
+		ConditionFormatTemplate: "per-connection rate limit events > <threshold>",
+	},
+	KeyspacesLatencyGap: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeManual,
+		Title:                   "Keyspaces client vs. server latency gap",
+		DefaultThreshold:        0.05,
+		Unit:                    CheckUnitSecond,
+		MessageTemplate:         `client latency significantly exceeds Keyspaces server p99 latency`,
+		ConditionFormatTemplate: "eBPF client latency - CloudWatch server p99 > <threshold>",
+	},
+	KeyspacesSystemErrors: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeManual,
+		Title:                   "Keyspaces system errors",
+		DefaultThreshold:        0,
+		MessageTemplate:         `AWS-side Keyspaces system errors detected`,
+		ConditionFormatTemplate: "system errors > <threshold>",
+	},
+	KeyspacesUserErrors: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeManual,
+		Title:                   "Keyspaces client user errors",
+		DefaultThreshold:        0,
+		MessageTemplate:         `application query or schema user errors detected`,
+		ConditionFormatTemplate: "net client user errors (excluding throttling and per-connection limits) > <threshold>",
 	},
 }
 

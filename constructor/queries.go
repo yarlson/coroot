@@ -102,6 +102,10 @@ func qRDS(name, query string, labels ...string) Query {
 	return Q(name, query, slices.Concat([]string{"rds_instance_id"}, labels)...)
 }
 
+func qKeyspaces(name, query string, labels ...string) Query {
+	return Q(name, query, slices.Concat([]string{"keyspaces_id"}, labels)...)
+}
+
 func qCloudSQL(name, query string, labels ...string) Query {
 	return Q(name, query, slices.Concat([]string{"cloudsql_instance_id"}, labels)...)
 }
@@ -376,6 +380,22 @@ var QUERIES = []Query{
 
 	Q("aws_elasticache_info", `aws_elasticache_info`, "ec_instance_id", "cluster_id", "ipv4", "port", "engine", "engine_version", "instance_type", "region", "availability_zone"),
 	Q("aws_elasticache_status", `aws_elasticache_status`, "ec_instance_id", "status"),
+
+	qKeyspaces("aws_keyspaces_info", `aws_keyspaces_info`, "account", "region"),
+	qKeyspaces("aws_keyspaces_endpoint_info", `aws_keyspaces_endpoint_info`, "addr", "port", "kind"),
+	qKeyspaces("aws_keyspaces_table_info", `aws_keyspaces_table_info`, "keyspace", "table", "capacity_mode", "status"),
+	qKeyspaces("aws_keyspaces_provisioned_capacity_units", `aws_keyspaces_provisioned_capacity_units`, "keyspace", "table", "type"),
+	qKeyspaces("aws_keyspaces_warm_throughput_units", `aws_keyspaces_warm_throughput_units`, "keyspace", "table", "type"),
+	qKeyspaces("aws_keyspaces_consumed_capacity_units_per_second", `aws_keyspaces_consumed_capacity_units_per_second`, "keyspace", "table", "type"),
+	qKeyspaces("aws_keyspaces_table_size_bytes", `aws_keyspaces_table_size_bytes`, "keyspace", "table"),
+	qKeyspaces("aws_keyspaces_requests_window", `aws_keyspaces_requests_window`, "keyspace", "table", "operation"),
+	qKeyspaces("aws_keyspaces_request_latency_seconds", `aws_keyspaces_request_latency_seconds`, "keyspace", "table", "operation", "stat"),
+	qKeyspaces("aws_keyspaces_throttle_events", `aws_keyspaces_throttle_events`, "keyspace", "table", "type"),
+	qKeyspaces("aws_keyspaces_partition_limit_events", `aws_keyspaces_partition_limit_events`, "keyspace", "table"),
+	qKeyspaces("aws_keyspaces_user_errors", `aws_keyspaces_user_errors`, "keyspace", "table"),
+	qKeyspaces("aws_keyspaces_account_user_errors", `aws_keyspaces_account_user_errors`, "operation"),
+	qKeyspaces("aws_keyspaces_system_errors", `aws_keyspaces_system_errors`, "keyspace", "table"),
+	qKeyspaces("aws_keyspaces_per_connection_limit_events", `aws_keyspaces_per_connection_limit_events`),
 
 	qCloudSQL("gcp_cloudsql_info", `gcp_cloudsql_info`, "project", "region", "zone", "ipv4", "port", "engine", "engine_version", "tier", "availability_type", "connection_name", "instance_type", "primary_instance"),
 	qCloudSQL("gcp_cloudsql_status", `gcp_cloudsql_status`, "status"),

@@ -339,6 +339,8 @@ type IntegrationAWS struct {
 
 	RDSTagFilters         map[string]string `json:"rds_tag_filters"`
 	ElasticacheTagFilters map[string]string `json:"elasticache_tag_filters"`
+	KeyspacesEnabled      bool              `json:"keyspaces_enabled"`
+	KeyspacesTagFilters   map[string]string `json:"keyspaces_tag_filters"`
 }
 
 func (db *DB) SaveIntegrationsBaseUrl(id ProjectId, baseUrl string) error {

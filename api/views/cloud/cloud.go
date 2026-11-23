@@ -40,6 +40,11 @@ func AWS(w *model.World, configured bool) *View {
 			return i.Rds.Status, i.Rds.Engine, i.Rds.EngineVersion, true
 		case i.Elasticache != nil:
 			return i.Elasticache.Status, i.Elasticache.Engine, i.Elasticache.EngineVersion, true
+		case i.Keyspaces != nil:
+			var engine, version model.LabelLastValue
+			engine.Update(i.Keyspaces.LifeSpan, "cassandra (keyspaces)")
+			version.Update(i.Keyspaces.LifeSpan, i.Keyspaces.Region.Value())
+			return i.Keyspaces.Status, engine, version, true
 		}
 		return model.LabelLastValue{}, model.LabelLastValue{}, model.LabelLastValue{}, false
 	})

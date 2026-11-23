@@ -63,6 +63,7 @@ type Instance struct {
 	OCIDB       *OCIDB
 	OCICache    *OCICache
 	Elasticache *Elasticache
+	Keyspaces   *Keyspaces
 
 	Jvms   map[string]*Jvm
 	DotNet map[string]*DotNet
@@ -132,11 +133,14 @@ func (instance *Instance) ApplicationTypes() map[ApplicationType]bool {
 	if t := instance.OCICache.ApplicationType(); t != ApplicationTypeUnknown {
 		res[t] = true
 	}
+	if t := instance.Keyspaces.ApplicationType(); t != ApplicationTypeUnknown {
+		res[t] = true
+	}
 	return res
 }
 
 func (instance *Instance) IsManagedDatabase() bool {
-	return instance.Rds != nil || instance.Elasticache != nil || instance.CloudSQL != nil || instance.Memorystore != nil || instance.OCIDB != nil || instance.OCICache != nil
+	return instance.Rds != nil || instance.Elasticache != nil || instance.CloudSQL != nil || instance.Memorystore != nil || instance.OCIDB != nil || instance.OCICache != nil || instance.Keyspaces != nil
 }
 
 func (instance *Instance) InstrumentedType() ApplicationType {
@@ -215,6 +219,9 @@ func (instance *Instance) LifeSpan() *timeseries.TimeSeries {
 	if instance.Pod != nil {
 		return instance.Pod.LifeSpan
 	}
+	if instance.Keyspaces != nil {
+		return instance.Keyspaces.LifeSpan
+	}
 	for _, c := range instance.Containers {
 		return c.MemoryRss.Map(timeseries.Defined)
 	}
@@ -222,6 +229,9 @@ func (instance *Instance) LifeSpan() *timeseries.TimeSeries {
 }
 
 func (instance *Instance) IsUp() bool {
+	if instance.Keyspaces != nil {
+		return instance.Keyspaces.IsUp()
+	}
 	for _, c := range instance.Containers {
 		if !c.MemoryRss.TailIsEmpty() {
 			return true
@@ -244,6 +254,14 @@ func (instance *Instance) IsJobPod() bool {
 }
 
 func (instance *Instance) UpAndRunning() *timeseries.TimeSeries {
+	if instance.Keyspaces != nil && !instance.Keyspaces.LifeSpan.IsEmpty() {
+		return instance.Keyspaces.LifeSpan.Map(func(t timeseries.Time, v float32) float32 {
+			if v > 0 {
+				return 1
+			}
+			return 0
+		})
+	}
 	mem := timeseries.NewAggregate(timeseries.Any)
 	for _, c := range instance.Containers {
 		mem.Add(c.MemoryRss)

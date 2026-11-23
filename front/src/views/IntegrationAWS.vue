@@ -1,9 +1,10 @@
 <template>
     <div>
         <p style="max-width: 800px">
-            This integration enables Coroot to discover RDS and ElastiCache instances and collect their telemetry data: instance status, OS metrics
-            from Enhanced Monitoring, and database logs. The recommended setup lets the cluster-agent use the IAM role of its pod (EKS Pod Identity or
-            IRSA) and declares the integration and the database credentials in the Coroot custom resource, see the
+            This integration enables Coroot to discover RDS, ElastiCache, and Amazon Keyspaces resources and collect their telemetry data: instance
+            status, OS metrics from Enhanced Monitoring, database logs, and Keyspaces CloudWatch metrics. The recommended setup lets the
+            cluster-agent use the IAM role of its pod (EKS Pod Identity or IRSA) and declares the integration and the database credentials in the
+            Coroot custom resource, see the
             <a href="https://docs.coroot.com/configuration/aws" target="_blank">AWS integration</a> page and the
             <a href="https://docs.coroot.com/guides/aws-eks-rds" target="_blank">Monitoring Amazon RDS and ElastiCache from EKS</a> guide.
         </p>
@@ -31,7 +32,17 @@
                 "rds:DownloadDBLogFilePortion",
                 "rds:ListTagsForResource",
                 "elasticache:DescribeCacheClusters",
-                "elasticache:ListTagsForResource"
+                "elasticache:ListTagsForResource",
+                "sts:GetCallerIdentity",
+                "cassandra:ListKeyspaces",
+                "cassandra:GetKeyspace",
+                "cassandra:ListTables",
+                "cassandra:GetTable",
+                "cassandra:GetTableAutoScalingSettings",
+                "cassandra:ListTagsForResource",
+                "cassandra:Select",
+                "cloudwatch:GetMetricData",
+                "cloudwatch:ListMetrics"
             ],
             "Resource": [
                 "*"
@@ -95,6 +106,25 @@
             </div>
             <v-text-field v-model="elasticache_tag_filters" outlined dense hide-details single-line />
 
+            <v-checkbox
+                v-model="form.keyspaces_enabled"
+                label="Enable Amazon Keyspaces monitoring (CloudWatch AWS/Cassandra)"
+                dense
+                hide-details
+                class="mt-4"
+            />
+            <div class="caption mt-1">
+                Off by default to prevent unintended CloudWatch GetMetricData charges. When enabled, Coroot discovers keyspaces, tables, endpoint
+                peers, and polls AWS/Cassandra metrics.
+            </div>
+            <div class="subtitle-1 mt-3">Keyspaces tag filters</div>
+            <div class="caption">
+                Limit discovery by matching tags on keyspaces (tables do not inherit keyspace tags; all tables in matched keyspaces are collected).
+                <br />
+                Specify tag_name=tag_value pairs with optional glob patterns, e.g. <var>project=keyspaces-*,team=checkout</var>.
+            </div>
+            <v-text-field v-model="keyspaces_tag_filters" :disabled="!form.keyspaces_enabled" outlined dense hide-details single-line />
+
             <v-alert v-if="error" color="red" icon="mdi-alert-octagon-outline" outlined text class="mt-3" style="max-width: 800px">
                 {{ error }}
             </v-alert>
@@ -143,6 +173,7 @@ export default {
             message: '',
             rds_tag_filters: '',
             elasticache_tag_filters: '',
+            keyspaces_tag_filters: '',
             configured: false,
             detected: false,
             policyDialog: false,
@@ -169,6 +200,7 @@ export default {
                 this.form = data.form;
                 this.rds_tag_filters = map2str(this.form.rds_tag_filters);
                 this.elasticache_tag_filters = map2str(this.form.elasticache_tag_filters);
+                this.keyspaces_tag_filters = map2str(this.form.keyspaces_tag_filters);
                 this.configured = !!data.view.configured;
                 this.detected = !!data.view.detected;
                 this.showForm = this.showForm || this.configured; // settings saved here stay visible
@@ -182,6 +214,7 @@ export default {
             this.message = '';
             this.form.rds_tag_filters = str2map(this.rds_tag_filters);
             this.form.elasticache_tag_filters = str2map(this.elasticache_tag_filters);
+            this.form.keyspaces_tag_filters = str2map(this.keyspaces_tag_filters);
             const form = JSON.parse(JSON.stringify(this.form));
             this.$api.saveIntegrations('aws', 'save', form, (data, error) => {
                 this.loading = false;

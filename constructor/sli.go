@@ -50,6 +50,10 @@ func (c *Constructor) loadSLIs(w *model.World, metrics map[string][]*model.Metri
 				agg = builtinAvailabilityAgg[app.Id]
 				raw = builtinAvailabilityRaw[app.Id]
 			}
+			if agg.total.IsEmpty() && app.IsKeyspaces() {
+				agg = keyspacesAvailability(app)
+				raw = agg
+			}
 			if agg.failed.IsEmpty() {
 				agg.failed = agg.total.WithNewValue(timeseries.NaN)
 			}
@@ -283,4 +287,52 @@ func histogramBuckets(values map[string]*timeseries.TimeSeries) []model.Histogra
 		return buckets[i].Le < buckets[j].Le
 	})
 	return buckets
+}
+
+// keyspacesAvailability computes a CloudWatch-based Availability SLI fallback for Keyspaces
+// when eBPF L7 metrics are absent (e.g. Java async SSLEngine, Node.js TLS, or multi-cluster views).
+// Per-table UserErrors already subsumes table throttles and hot partitions 1:1, and account
+// UserErrors[EXECUTE] subsumes PerConnectionRequestRateExceeded 1:1, so we avoid double-counting.
+// Account UserErrors[PREPARE] (client syntax/column errors) is excluded from availability SLO.
+func keyspacesAvailability(app *model.Application) availabilitySlis {
+	good := timeseries.NewAggregate(timeseries.NanSum)
+	failed := timeseries.NewAggregate(timeseries.NanSum)
+	for _, i := range app.Instances {
+		if i.Keyspaces == nil {
+			continue
+		}
+		ks := i.Keyspaces
+		for _, t := range ks.Tables {
+			for _, ts := range t.RequestsWindow {
+				good.Add(ts)
+			}
+			throttles := timeseries.NewAggregate(timeseries.NanSum).Add(t.ReadThrottleEvents, t.WriteThrottleEvents).Get()
+			tableErrs := timeseries.NewAggregate(timeseries.Max).Add(t.UserErrors, throttles).Get()
+			failed.Add(tableErrs)
+			failed.Add(t.SystemErrors)
+		}
+		execErrs := timeseries.NewAggregate(timeseries.Max).Add(ks.AccountUserErrors["EXECUTE"], ks.PerConnectionLimitEvents).Get()
+		failed.Add(execErrs)
+	}
+	goodTs := good.Get()
+	failedTs := failed.Get()
+	totalTs := timeseries.NewAggregate(timeseries.NanSum).Add(goodTs, failedTs).Get()
+	if totalTs.IsEmpty() {
+		return availabilitySlis{}
+	}
+	toPerSec := func(ts *timeseries.TimeSeries) *timeseries.TimeSeries {
+		if ts.IsEmpty() {
+			return ts
+		}
+		return ts.Map(func(t timeseries.Time, v float32) float32 {
+			if timeseries.IsNaN(v) {
+				return timeseries.NaN
+			}
+			return v / 300.0
+		})
+	}
+	return availabilitySlis{
+		total:  toPerSec(totalTs),
+		failed: toPerSec(failedTs),
+	}
 }

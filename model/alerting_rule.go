@@ -1005,6 +1005,74 @@ func BuiltinAlertingRules() []AlertingRule {
 			Builtin: true,
 		},
 		{
+			Id:   "keyspaces-hot-partition",
+			Name: "Keyspaces hot partition",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesHotPartition.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "A Keyspaces partition key exceeded single-partition throughput (~1,000 WCU / 3,000 RCU). Spread traffic across more partition keys.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
+			Id:   "keyspaces-throttling",
+			Name: "Keyspaces read/write throttling",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesThrottling.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "Keyspaces is throttling table reads or writes. Raise provisioned RCU/WCU, enable auto scaling, or review on-demand warm throughput.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
+			Id:   "keyspaces-per-connection-limit",
+			Name: "Keyspaces per-connection rate limit",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesPerConnectionLimit.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "Keyspaces rejected requests due to the per-connection request rate limit (~3,000 req/s per TCP connection). Increase connections per host in the CQL driver.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
+			Id:   "keyspaces-system-errors",
+			Name: "Keyspaces system errors",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesSystemErrors.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "Keyspaces returned AWS-side SystemErrors. Check AWS Health Dashboard.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
 			Id:   "new-log-patterns",
 			Name: "Log errors",
 			Source: AlertSource{
