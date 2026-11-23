@@ -139,7 +139,6 @@ func (a *appAuditor) keyspaces() {
 	throttleCheck := report.CreateCheck(model.Checks.KeyspacesThrottling)
 	capacityCheck := report.CreateCheck(model.Checks.KeyspacesCapacity)
 	perConnCheck := report.CreateCheck(model.Checks.KeyspacesPerConnectionLimit)
-	latencyGapCheck := report.CreateCheck(model.Checks.KeyspacesLatencyGap)
 	systemErrCheck := report.CreateCheck(model.Checks.KeyspacesSystemErrors)
 	userErrCheck := report.CreateCheck(model.Checks.KeyspacesUserErrors)
 
@@ -164,12 +163,11 @@ func (a *appAuditor) keyspaces() {
 	throttleCheck.AddWidget(rejectionsChart.Widget())
 	capacityCheck.AddWidget(capacityCharts.Widget())
 	perConnCheck.AddWidget(rejectionsChart.Widget())
-	latencyGapCheck.AddWidget(latencyChart.Widget())
 	systemErrCheck.AddWidget(rejectionsChart.Widget())
 	userErrCheck.AddWidget(rejectionsChart.Widget())
 
 	if !ks.HasCloudWatchData() {
-		for _, ch := range []*model.Check{hotPartCheck, throttleCheck, capacityCheck, perConnCheck, latencyGapCheck, systemErrCheck, userErrCheck} {
+		for _, ch := range []*model.Check{hotPartCheck, throttleCheck, capacityCheck, perConnCheck, systemErrCheck, userErrCheck} {
 			ch.SetStatus(model.UNKNOWN, "no data")
 		}
 		report.Status = model.UNKNOWN
@@ -192,7 +190,6 @@ func (a *appAuditor) keyspaces() {
 		systemErrTables   []string
 		userErrMsgs       []string
 		provisionedCount  int
-		maxServerP99      float32
 		totalHotPartTs    = timeseries.NewAggregate(timeseries.NanSum)
 		totalCapThrTs     = timeseries.NewAggregate(timeseries.NanSum)
 		totalNetUserErrTs = timeseries.NewAggregate(timeseries.NanSum)
@@ -292,9 +289,6 @@ func (a *appAuditor) keyspaces() {
 			if !timeseries.IsNaN(v) {
 				if timeseries.IsNaN(tableMaxP99) || v > tableMaxP99 {
 					tableMaxP99 = v
-				}
-				if v > maxServerP99 {
-					maxServerP99 = v
 				}
 			}
 		}
@@ -436,54 +430,7 @@ func (a *appAuditor) keyspaces() {
 	}
 
 	if acctCls.PerConnectionLimit > perConnCheck.Threshold {
-		clients := describeKeyspacesClients(a.app)
-		if len(clients) > 0 {
-			perConnCheck.SetStatus(model.WARNING, "%.0f per-connection limit rejections; %s — raise connections per host in the driver.", acctCls.PerConnectionLimit, strings.Join(clients, "; "))
-		} else {
-			perConnCheck.SetStatus(model.WARNING, "%.0f per-connection limit rejections (~3,000 req/s per TCP connection) — raise connections per host in the driver.", acctCls.PerConnectionLimit)
-		}
-	}
-
-	// Client vs. server latency gap check
-	var gapClients []string
-	if maxServerP99 > 0 {
-		for _, d := range a.app.Downstreams {
-			if d.Application == nil || d.Application == a.app {
-				continue
-			}
-			clientLat := clientAvgLatency(d, model.ProtocolCassandra)
-			if clientLat.IsEmpty() {
-				continue
-			}
-			cl := trailingWindowMax(clientLat, a.w.Ctx, keyspacesEvalWindow)
-			if !timeseries.IsNaN(cl) && cl-maxServerP99 > latencyGapCheck.Threshold {
-				var hints []string
-				if rtt := trailingWindowMax(d.Rtt, a.w.Ctx, keyspacesEvalWindow); !timeseries.IsNaN(rtt) && rtt > 0.02 {
-					hints = append(hints, fmt.Sprintf("RTT %s", utils.FormatLatency(rtt)))
-				}
-				if retr := trailingWindowMax(d.Retransmissions, a.w.Ctx, keyspacesEvalWindow); !timeseries.IsNaN(retr) && retr > 0 {
-					hints = append(hints, "TCP retransmits")
-				}
-				if failed := trailingWindowMax(d.FailedConnections, a.w.Ctx, keyspacesEvalWindow); !timeseries.IsNaN(failed) && failed > 0 {
-					hints = append(hints, "failed connects")
-				}
-				if d.Application.IsJvm() {
-					hints = append(hints, "check JVM GC")
-				}
-				if d.Application.IsNodejs() {
-					hints = append(hints, "check Node.js event loop")
-				}
-				hintStr := "check network RTT, TCP retransmits, or client runtime stalls"
-				if len(hints) > 0 {
-					hintStr = strings.Join(hints, ", ")
-				}
-				gapClients = append(gapClients, fmt.Sprintf("%s client %s vs. server p99 %s (%s)", d.Application.Id.Name, utils.FormatLatency(cl), utils.FormatLatency(maxServerP99), hintStr))
-			}
-		}
-	}
-	if len(gapClients) > 0 {
-		sort.Strings(gapClients)
-		latencyGapCheck.SetStatus(model.WARNING, "%s.", strings.Join(gapClients, "; "))
+		perConnCheck.SetStatus(model.WARNING, "%.0f per-connection limit rejections (~3,000 req/s per TCP connection) — raise connections per host in the driver.", acctCls.PerConnectionLimit)
 	}
 
 	if len(systemErrTables) > 0 {
@@ -515,54 +462,4 @@ func formatOptFloat(v float32) string {
 		return "—"
 	}
 	return fmt.Sprintf("%.1f", v)
-}
-
-func clientAvgLatency(d *model.AppToAppConnection, proto model.Protocol) *timeseries.TimeSeries {
-	totalLat := d.RequestsLatency[proto]
-	byStatus := d.RequestsCount[proto]
-	if totalLat.IsEmpty() || len(byStatus) == 0 {
-		return nil
-	}
-	totalReq := timeseries.NewAggregate(timeseries.NanSum)
-	for _, ts := range byStatus {
-		totalReq.Add(ts)
-	}
-	reqTs := totalReq.Get()
-	if reqTs.IsEmpty() {
-		return nil
-	}
-	return timeseries.Div(totalLat, reqTs)
-}
-
-func describeKeyspacesClients(app *model.Application) []string {
-	var out []string
-	for _, d := range app.Downstreams {
-		if d.Application == nil || d.Application == app {
-			continue
-		}
-		var rps float32
-		if byStatus := d.RequestsCount[model.ProtocolCassandra]; byStatus != nil {
-			agg := timeseries.NewAggregate(timeseries.NanSum)
-			for _, ts := range byStatus {
-				agg.Add(ts)
-			}
-			if v := agg.Get().Reduce(timeseries.Max); !timeseries.IsNaN(v) {
-				rps = v
-			}
-		}
-		conns := d.Active.Last()
-		if timeseries.IsNaN(conns) {
-			conns = d.Active.Reduce(timeseries.Max)
-		}
-		switch {
-		case rps > 0 && !timeseries.IsNaN(conns) && conns > 0:
-			out = append(out, fmt.Sprintf("%s sends ~%.0f req/s over %.0f connections", d.Application.Id.Name, rps, conns))
-		case !timeseries.IsNaN(conns) && conns > 0:
-			out = append(out, fmt.Sprintf("%s holds %.0f active connections", d.Application.Id.Name, conns))
-		default:
-			out = append(out, d.Application.Id.Name)
-		}
-	}
-	sort.Strings(out)
-	return out
 }

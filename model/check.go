@@ -125,7 +125,6 @@ var Checks = struct {
 	KeyspacesThrottling         CheckConfig
 	KeyspacesCapacity           CheckConfig
 	KeyspacesPerConnectionLimit CheckConfig
-	KeyspacesLatencyGap         CheckConfig
 	KeyspacesSystemErrors       CheckConfig
 	KeyspacesUserErrors         CheckConfig
 }{
@@ -663,15 +662,6 @@ var Checks = struct {
 		DefaultThreshold:        0,
 		MessageTemplate:         `per-connection request rate exceeded`,
 		ConditionFormatTemplate: "per-connection rate limit events > <threshold>",
-	},
-	KeyspacesLatencyGap: CheckConfig{
-		Category:                AuditReportKeyspaces,
-		Type:                    CheckTypeManual,
-		Title:                   "Keyspaces client vs. server latency gap",
-		DefaultThreshold:        0.05,
-		Unit:                    CheckUnitSecond,
-		MessageTemplate:         `client latency significantly exceeds Keyspaces server p99 latency`,
-		ConditionFormatTemplate: "eBPF client latency - CloudWatch server p99 > <threshold>",
 	},
 	KeyspacesSystemErrors: CheckConfig{
 		Category:                AuditReportKeyspaces,

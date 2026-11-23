@@ -138,16 +138,13 @@ func TestKeyspacesAuditor_MissingDataAndOnDemandAndAllFaults(t *testing.T) {
 	assert.Contains(t, chUE.Message, "PREPARE invalid queries (50)")
 	assert.NotContains(t, chUE.Message, "ks.t_prov", "throttles must be subtracted from table UserErrors")
 
-	// Verify clientAvgLatency divides total latency rate by request count rate (not raw total latency)
-	conn := &model.AppToAppConnection{
-		RequestsCount: map[model.Protocol]map[string]*timeseries.TimeSeries{
-			model.ProtocolCassandra: {"ok": timeseries.NewWithData(ctx.From, ctx.Step, []float32{100, 100, 100, 100, 100, 100})},
-		},
-		RequestsLatency: map[model.Protocol]*timeseries.TimeSeries{
-			model.ProtocolCassandra: timeseries.NewWithData(ctx.From, ctx.Step, []float32{20, 20, 20, 20, 20, 20}),
-		},
+	// Verify the Keyspaces report exposes strictly the 6 single-plane CloudWatch checks
+	var faultKsRep *model.AuditReport
+	for _, r := range appFault.Reports {
+		if r.Name == model.AuditReportKeyspaces {
+			faultKsRep = r
+		}
 	}
-	avgLat := clientAvgLatency(conn, model.ProtocolCassandra)
-	require.NotNil(t, avgLat)
-	assert.InDelta(t, 0.2, float64(avgLat.Last()), 0.001)
+	require.NotNil(t, faultKsRep)
+	assert.Len(t, faultKsRep.Checks, 6)
 }
