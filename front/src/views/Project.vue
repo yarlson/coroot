@@ -116,8 +116,8 @@
         <template v-if="tab === 'clouds' || tab === 'aws'">
             <h1 class="text-h5 my-5">Cloud integrations</h1>
             <p style="max-width: 800px">
-                Coroot discovers the managed databases of your cloud provider and monitors them alongside your own services: RDS and ElastiCache on
-                AWS, Cloud SQL and Memorystore on GCP, MySQL HeatWave, PostgreSQL and OCI Cache on Oracle Cloud.
+                Coroot discovers the managed databases of your cloud provider and monitors them alongside your own services: RDS, ElastiCache and
+                Keyspaces on AWS, Cloud SQL and Memorystore on GCP, MySQL HeatWave, PostgreSQL and OCI Cache on Oracle Cloud.
             </p>
             <h2 class="mt-8 mb-3">
                 <img :src="`${$coroot.base_path}static/img/icons/aws${$vuetify.theme.dark ? '-dark' : ''}.svg`" height="28" alt="AWS" />

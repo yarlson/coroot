@@ -2,8 +2,9 @@
     <div>
         <p style="max-width: 800px">
             This integration enables Coroot to discover RDS and ElastiCache instances and collect their telemetry data: instance status, OS metrics
-            from Enhanced Monitoring, and database logs. The recommended setup lets the cluster-agent use the IAM role of its pod (EKS Pod Identity or
-            IRSA) and declares the integration and the database credentials in the Coroot custom resource, see the
+            from Enhanced Monitoring, and database logs. It can also monitor Amazon Keyspaces tables through CloudWatch. The recommended setup lets
+            the cluster-agent use the IAM role of its pod (EKS Pod Identity or IRSA) and declares the integration and the database credentials in the
+            Coroot custom resource, see the
             <a href="https://docs.coroot.com/configuration/aws" target="_blank">AWS integration</a> page and the
             <a href="https://docs.coroot.com/guides/aws-eks-rds" target="_blank">Monitoring Amazon RDS and ElastiCache from EKS</a> guide.
         </p>
@@ -45,6 +46,27 @@
             "Resource": [
                 "arn:aws:logs:*:*:log-group:RDSOSMetrics:log-stream:*"
             ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cassandra:Select"
+            ],
+            "Resource": [
+                "arn:aws:cassandra:*:*:/keyspace/*"
+            ]
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "application-autoscaling:DescribeScalableTargets",
+                "application-autoscaling:DescribeScalingPolicies",
+                "cloudwatch:GetMetricData",
+                "cloudwatch:ListMetrics"
+            ],
+            "Resource": [
+                "*"
+            ]
         }
     ]
 }
@@ -67,8 +89,8 @@
             </p>
             <div class="subtitle-1 mt-3">Region</div>
             <div class="caption">
-                Coroot only discovers RDS and ElastiCache instances within the specified region, e.g. <var>us-west-1</var>. Leave it empty to use the
-                region the cluster-agent runs in.
+                Coroot only discovers RDS and ElastiCache instances and Keyspaces tables within the specified region, e.g. <var>us-west-1</var>. Leave
+                it empty to use the region the cluster-agent runs in.
             </div>
             <v-text-field v-model="form.region" outlined dense hide-details single-line clearable />
 
@@ -94,6 +116,21 @@
                 supported for the value part, e.g. <var>team=qa,env=staging*</var>.
             </div>
             <v-text-field v-model="elasticache_tag_filters" outlined dense hide-details single-line />
+
+            <div class="subtitle-1 mt-3">Amazon Keyspaces</div>
+            <v-checkbox v-model="form.keyspaces_enabled" label="Monitor Amazon Keyspaces" dense hide-details class="mt-0" />
+            <div class="caption">
+                Coroot discovers the Keyspaces tables and endpoints of the account and polls their CloudWatch metrics. CloudWatch charges about $1.22
+                per active table per month.
+            </div>
+            <template v-if="form.keyspaces_enabled">
+                <div class="subtitle-1 mt-3">Keyspaces tag filters</div>
+                <div class="caption">
+                    You can limit the monitoring to the tables of the keyspaces whose tags match. Tables don't inherit the tags of their keyspace, so
+                    the filter applies to keyspace tags. Specify tag_name=tag_value pairs, e.g. <var>team=checkout</var>.
+                </div>
+                <v-text-field v-model="keyspaces_tag_filters" outlined dense hide-details single-line />
+            </template>
 
             <v-alert v-if="error" color="red" icon="mdi-alert-octagon-outline" outlined text class="mt-3" style="max-width: 800px">
                 {{ error }}
@@ -143,6 +180,7 @@ export default {
             message: '',
             rds_tag_filters: '',
             elasticache_tag_filters: '',
+            keyspaces_tag_filters: '',
             configured: false,
             detected: false,
             policyDialog: false,
@@ -169,6 +207,7 @@ export default {
                 this.form = data.form;
                 this.rds_tag_filters = map2str(this.form.rds_tag_filters);
                 this.elasticache_tag_filters = map2str(this.form.elasticache_tag_filters);
+                this.keyspaces_tag_filters = map2str(this.form.keyspaces_tag_filters);
                 this.configured = !!data.view.configured;
                 this.detected = !!data.view.detected;
                 this.showForm = this.showForm || this.configured; // settings saved here stay visible
@@ -182,6 +221,7 @@ export default {
             this.message = '';
             this.form.rds_tag_filters = str2map(this.rds_tag_filters);
             this.form.elasticache_tag_filters = str2map(this.elasticache_tag_filters);
+            this.form.keyspaces_tag_filters = str2map(this.keyspaces_tag_filters);
             const form = JSON.parse(JSON.stringify(this.form));
             this.$api.saveIntegrations('aws', 'save', form, (data, error) => {
                 this.loading = false;
