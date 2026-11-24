@@ -27,6 +27,7 @@ const (
 	ApplicationKindMemorystore           ApplicationKind = "Memorystore"
 	ApplicationKindOCIDB                 ApplicationKind = "OCIDB"
 	ApplicationKindOCICache              ApplicationKind = "OCICache"
+	ApplicationKindKeyspaces             ApplicationKind = "Keyspaces"
 	ApplicationKindNomadJobGroup         ApplicationKind = "NomadJobGroup"
 	ApplicationKindECSService            ApplicationKind = "ECSService"
 	ApplicationKindArgoWorkflow          ApplicationKind = "Workflow"

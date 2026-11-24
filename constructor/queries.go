@@ -118,6 +118,10 @@ func qOCICache(name, query string, labels ...string) Query {
 	return Q(name, query, slices.Concat([]string{"oci_cache_id"}, labels)...)
 }
 
+func qKeyspaces(name, query string, labels ...string) Query {
+	return Q(name, query, slices.Concat([]string{"keyspaces_id"}, labels)...)
+}
+
 func qDB(name, query string, labels ...string) Query {
 	return Q(name, query, slices.Concat(possibleDBInstanceLabels, possibleNamespaceLabels, possiblePodLabels, labels)...)
 }
@@ -423,6 +427,17 @@ var QUERIES = []Query{
 	qOCICache("oci_cache_memory_used_bytes", `oci_cache_memory_used_bytes`),
 	qOCICache("oci_cache_network_bytes_per_second", `oci_cache_network_bytes_per_second`, "direction"),
 	qOCICache("oci_cache_log_messages_total", `oci_cache_log_messages_total % 10000000`, "level", "pattern_hash", "sample", "job", "instance"),
+
+	qKeyspaces("aws_keyspaces_info", `aws_keyspaces_info`, "account_id", "region"),
+	qKeyspaces("aws_keyspaces_endpoint", `aws_keyspaces_endpoint`, "host", "port"),
+	qKeyspaces("aws_keyspaces_table_info", `aws_keyspaces_table_info`, "keyspace", "table", "capacity_mode", "auto_scaling"),
+	qKeyspaces("aws_keyspaces_table_provisioned_capacity_units", `aws_keyspaces_table_provisioned_capacity_units`, "keyspace", "table", "operation"),
+	qKeyspaces("aws_keyspaces_table_consumed_capacity_units", `aws_keyspaces_table_consumed_capacity_units`, "keyspace", "table", "operation"),
+	qKeyspaces("aws_keyspaces_table_size_bytes", `aws_keyspaces_table_size_bytes`, "keyspace", "table"),
+	qKeyspaces("aws_keyspaces_table_latency_seconds", `aws_keyspaces_table_latency_seconds`, "keyspace", "table", "operation"),
+	qKeyspaces("aws_keyspaces_table_requests", `aws_keyspaces_table_requests`, "keyspace", "table", "operation"),
+	qKeyspaces("aws_keyspaces_table_errors", `aws_keyspaces_table_errors`, "keyspace", "table", "type"),
+	qKeyspaces("aws_keyspaces_account_errors", `aws_keyspaces_account_errors`, "type", "operation"),
 
 	qDB("pg_up", `pg_up`),
 	qDB("pg_scrape_error", `pg_scrape_error`, "error", "warning"),

@@ -40,6 +40,15 @@ func AWS(w *model.World, configured bool) *View {
 			return i.Rds.Status, i.Rds.Engine, i.Rds.EngineVersion, true
 		case i.Elasticache != nil:
 			return i.Elasticache.Status, i.Elasticache.Engine, i.Elasticache.EngineVersion, true
+		case i.Keyspaces != nil:
+			var status, engine model.LabelLastValue
+			s := "active"
+			if !i.Keyspaces.IsUp() {
+				s = "down (no metrics)"
+			}
+			status.Update(i.Keyspaces.LifeSpan, s)
+			engine.Update(i.Keyspaces.LifeSpan, "keyspaces")
+			return status, engine, model.LabelLastValue{}, true
 		}
 		return model.LabelLastValue{}, model.LabelLastValue{}, model.LabelLastValue{}, false
 	})
