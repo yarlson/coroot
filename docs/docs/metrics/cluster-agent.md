@@ -1417,6 +1417,8 @@ Memcached metrics are collected by the embedded [memcached_exporter](https://git
 
 When the [AWS integration](/configuration/aws) is configured, the agent discovers RDS instances and ElastiCache nodes through the AWS API (optionally filtered by tags) and exposes their state. Every RDS metric carries an `rds_instance_id` label (`<region>/<DBInstanceIdentifier>`) and every ElastiCache metric an `ec_instance_id` label (`<region>/<CacheClusterId>/<CacheNodeId>`), which Coroot uses to match the instances to the applications that connect to them.
 
+When [Amazon Keyspaces](/configuration/aws#amazon-keyspaces) monitoring is enabled, the agent also exposes the `aws_keyspaces_*` metrics. Every one of them carries a `keyspaces_id` label (`<account ID>/<region>`).
+
 ### aws_discovery_error
 * **Description**: 1 for each distinct AWS API error encountered during the last discovery cycle, 0 when discovery succeeded
 * **Type**: Gauge
@@ -1502,6 +1504,68 @@ The following OS-level metrics are read from [RDS Enhanced Monitoring](https://d
 * **Description**: The status of the ElastiCache node (e.g. `available`, `creating`, `rebooting`)
 * **Type**: Gauge
 * **Labels**: status
+
+### aws_keyspaces_info
+* **Description**: Amazon Keyspaces account and region
+* **Type**: Gauge
+* **Source**: `sts:GetCallerIdentity` and the region of the integration
+* **Labels**: keyspaces_id, account_id, region
+
+### aws_keyspaces_endpoint
+* **Description**: An address that clients connect to: the regional names, plus the private IP addresses of a VPC interface endpoint or the public IP addresses read from `system.peers`
+* **Type**: Gauge
+* **Labels**: keyspaces_id, host, port
+
+### aws_keyspaces_table_info
+* **Description**: Amazon Keyspaces table info; the system keyspaces are excluded
+* **Type**: Gauge
+* **Source**: `ListKeyspaces`, `ListTables`, `GetTable`, `GetTableAutoScalingSettings`
+* **Labels**: keyspaces_id, keyspace, table, capacity_mode (`provisioned`, `on-demand`), auto_scaling (`true`, `false`, empty for on-demand tables)
+
+### aws_keyspaces_table_provisioned_capacity_units
+* **Description**: The provisioned read or write capacity units of a table in provisioned capacity mode
+* **Type**: Gauge
+* **Labels**: keyspaces_id, keyspace, table, operation (`read`, `write`)
+
+The following metrics are read from CloudWatch (the `AWS/Cassandra` namespace). Every value ends 2 to 3 minutes in the past, because CloudWatch publishes data late:
+
+### aws_keyspaces_table_consumed_capacity_units
+* **Description**: Consumed read or write capacity units per second, over the last minute
+* **Type**: Gauge
+* **Source**: `ConsumedReadCapacityUnits`, `ConsumedWriteCapacityUnits`
+* **Labels**: keyspaces_id, keyspace, table, operation (`read`, `write`)
+
+### aws_keyspaces_table_size_bytes
+* **Description**: The table size; AWS recalculates it every few hours
+* **Type**: Gauge
+* **Source**: `BillableTableSizeInBytes`
+* **Labels**: keyspaces_id, keyspace, table
+
+### aws_keyspaces_table_latency_seconds
+* **Description**: p99 latency of successful requests over the last 5 minutes
+* **Type**: Gauge
+* **Source**: `SuccessfulRequestLatency`
+* **Labels**: keyspaces_id, keyspace, table, operation (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `BATCH`)
+
+### aws_keyspaces_table_requests
+* **Description**: Number of successful requests over the last 5 minutes
+* **Type**: Gauge
+* **Source**: the sample count of `SuccessfulRequestLatency`
+* **Labels**: keyspaces_id, keyspace, table, operation (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `BATCH`)
+
+### aws_keyspaces_table_errors
+* **Description**: Number of rejected requests to a table over 5 minutes, by CloudWatch metric. AWS counts one rejection in several types, for example a hot partition also as a write throttle event; Coroot separates them, see the [Keyspaces inspection](/inspections/keyspaces)
+* **Type**: Gauge
+* **Source**: `StoragePartitionThroughputCapacityExceeded` (`hot_partition`), `ReadThrottleEvents` (`read_throttle`), `WriteThrottleEvents` (`write_throttle`), `UserErrors` (`user`), `SystemErrors` (`system`)
+* **Labels**: keyspaces_id, keyspace, table, type
+
+### aws_keyspaces_account_errors
+* **Description**: Number of rejected requests over 5 minutes that are not attributed to a table; when CloudWatch reports the per-connection limit per table, the agent sums these series here. AWS counts one rejection in several types: a request rejected by the per-connection limit is also an `EXECUTE` user error
+* **Type**: Gauge
+* **Source**: `UserErrors` (`user`), `PerConnectionRequestRateExceeded` (`per_connection_limit`)
+* **Labels**: keyspaces_id, type, operation (for example `EXECUTE`, `PREPARE`)
+
+The agent reads only the series that CloudWatch reports as active in the last 3 hours, so a table without errors has no error series.
 
 ## FluxCD
 

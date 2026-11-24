@@ -53,6 +53,8 @@ aws:
   secretAccessKey: ${AWS_KEY}
   rdsTagFilters: {team: payments}
   elasticacheTagFilters: {}
+  keyspacesEnabled: true          # Optional: monitor Amazon Keyspaces through CloudWatch (default: false).
+  keyspacesTagFilters: {team: payments}   # Optional: monitor only the tables of the keyspaces whose tags match.
 
 # GCP integration settings (Cloud SQL and Memorystore discovery).
 gcp:

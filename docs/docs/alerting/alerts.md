@@ -79,6 +79,10 @@ Coroot comes with a set of built-in alerting rules that cover the most common fa
 | MongoDB availability | Database |
 | MongoDB replication lag | Database |
 | Memcached availability | Database |
+| Keyspaces hot partitions | Database |
+| Keyspaces throttling | Database |
+| Keyspaces per-connection limit | Database |
+| Keyspaces system errors | Database |
 | JVM availability | Runtime |
 | JVM safepoint time | Runtime |
 | .NET availability | Runtime |

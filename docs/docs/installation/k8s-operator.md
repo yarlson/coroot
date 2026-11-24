@@ -209,7 +209,7 @@ spec:
 #      name:           # Specifies the full image reference (e.g., <private-registry>/coroot-cluster-agent:<version>)
 #      pullPolicy:     # The image pull policy (e.g., Always, IfNotPresent, Never).
 #      pullSecrets: [] # The pull secrets for pulling the image from a private registry.
-#    # AWS integration (discovery of RDS and ElastiCache instances). Overrides the settings made in the Coroot UI.
+#    # AWS integration (discovery of RDS and ElastiCache instances, and Amazon Keyspaces tables). Overrides the settings made in the Coroot UI.
 #    aws:
 #      region:          # AWS region to discover instances in (default: the region the cluster runs in).
 #      accessKeySecret: # Secret with a static access key (keys: access_key_id, secret_access_key).
@@ -218,6 +218,8 @@ spec:
 #        team: payments
 #        env: "prod*"
 #      elasticacheTagFilters: {} # Same for ElastiCache clusters.
+#      keyspacesEnabled: false   # Monitor Amazon Keyspaces tables through CloudWatch.
+#      keyspacesTagFilters: {}   # Monitor only the tables of the keyspaces whose tags match (glob patterns are supported in values).
 #    # GCP integration (discovery of Cloud SQL and Memorystore instances).
 #    gcp:
 #      projectId:         # Project to discover instances in (default: the project of the GKE cluster).

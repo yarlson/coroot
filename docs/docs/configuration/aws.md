@@ -5,6 +5,7 @@ sidebar_position: 5.5
 # AWS
 
 The AWS integration lets Coroot discover Amazon RDS instances and ElastiCache nodes and collect their telemetry.
+It can also monitor [Amazon Keyspaces](#amazon-keyspaces) tables. Keyspaces monitoring is off by default.
 Discovered instances appear in the Service Map as separate applications, linked to the services that connect to them
 through the eBPF-based metrics collected on the client side.
 
@@ -14,6 +15,7 @@ The integration adds:
 * **OS-level metrics** from [RDS Enhanced Monitoring](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Monitoring.OS.html): CPU, memory, disk I/O, network
 * **Database logs** of RDS Postgres and MySQL instances (including Aurora), read through the RDS API: shipped to Coroot and grouped by message pattern
 * **Cost estimates** for RDS and ElastiCache instances in the [Costs](/costs/overview) report
+* **Amazon Keyspaces tables**: capacity, latency, requests, size and rejected requests, read from CloudWatch
 
 Database internals (query statistics, locks, replication) are collected separately, see
 [Database credentials](#database-credentials).
@@ -30,6 +32,9 @@ discovery status, the last errors reported by the agent, and the list of discove
 
 Whatever identity the agent uses, it needs the following read-only permissions: describing RDS and ElastiCache instances
 and their tags, reading RDS log files, and reading the `RDSOSMetrics` CloudWatch Logs group written by Enhanced Monitoring.
+The last two statements are for [Amazon Keyspaces](#amazon-keyspaces). You can leave them out when Keyspaces monitoring is off.
+The Keyspaces control-plane API needs `cassandra:Select` on the keyspaces and tables, so this statement also allows
+reading table data. The agent reads only the table list and the `system.peers` table.
 
 ```json
 {
@@ -53,6 +58,23 @@ and their tags, reading RDS log files, and reading the `RDSOSMetrics` CloudWatch
                 "logs:GetLogEvents"
             ],
             "Resource": "arn:aws:logs:*:*:log-group:RDSOSMetrics:log-stream:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cassandra:Select"
+            ],
+            "Resource": "arn:aws:cassandra:*:*:/keyspace/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "application-autoscaling:DescribeScalableTargets",
+                "application-autoscaling:DescribeScalingPolicies",
+                "cloudwatch:GetMetricData",
+                "cloudwatch:ListMetrics"
+            ],
+            "Resource": "*"
         }
     ]
 }
@@ -79,7 +101,7 @@ stores the key in the project settings and passes it to the cluster-agent along 
 
 ## Region
 
-Coroot discovers RDS and ElastiCache instances in a single region. Leave the **Region** field empty to use the region
+Coroot discovers RDS and ElastiCache instances and Keyspaces tables in a single region. Leave the **Region** field empty to use the region
 the cluster-agent runs in: the agent takes it from the `AWS_REGION` environment variable, then from the
 `topology.kubernetes.io/region` label of the Kubernetes nodes, and finally from the EC2 instance metadata service.
 Set the field explicitly to monitor instances in a different region than the one the agent runs in.
@@ -95,6 +117,9 @@ team=payments,env=prod*
 ```
 
 An instance is discovered only if all listed tags match.
+
+**Keyspaces tag filters** work the same way, but they match the tags of a keyspace, not of a table: tables don't inherit
+the tags of their keyspace. Coroot monitors all tables of a keyspace whose tags match.
 
 ## Enhanced Monitoring
 
@@ -117,6 +142,53 @@ can lag the time in the log line by up to that much.
 Log collection needs the `rds:DescribeDBLogFiles` and `rds:DownloadDBLogFilePortion` permissions from the policy
 above. Forwarding can be disabled with the cluster-agent's `--collect-aws-logs=false` flag, in which case only the
 pattern-based `aws_rds_log_messages_total` metric is collected. ElastiCache logs are not collected.
+
+## Amazon Keyspaces
+
+Amazon Keyspaces has no hosts, so the cluster-agent can't read metrics from the database itself. Instead, it reads the
+table inventory from the Keyspaces API and the server-side metrics from CloudWatch. The eBPF-based metrics of the
+clients complete the picture, see [Amazon Keyspaces](/databases/keyspaces).
+
+To enable it, select **Monitor Amazon Keyspaces** in the AWS settings, or set `keyspacesEnabled: true` in the
+[configuration as code](#configuration-as-code). The agent needs the Keyspaces statements of the
+[IAM policy](#iam-permissions).
+
+When it is enabled, the agent does these steps:
+
+* **Every minute**, it lists the keyspaces of the account and their tables. It gets the account ID from STS. The
+  system keyspaces (`system`, `system_schema`, `system_schema_mcs`, `system_multiregion_info`) are skipped. Every 5 minutes, it reads
+  the capacity mode, the provisioned read and write capacity, and the auto scaling settings of each table.
+* **Every 5 minutes**, it finds the endpoints that clients connect to on port 9142, so that Coroot can link the
+  clients to Keyspaces. It always adds the regional names `cassandra.<region>.amazonaws.com` and
+  `cassandra.<region>.api.aws`, and it resolves the IPv4 addresses of `cassandra.<region>.amazonaws.com`.
+  * When DNS returns only private IP addresses, the name points to a
+    [VPC interface endpoint](https://docs.aws.amazon.com/keyspaces/latest/devguide/vpc-endpoints.html) with private
+    DNS in the VPC of the agent. The agent uses these addresses.
+  * Otherwise, DNS returns one address of a pool of public addresses at a time. The agent connects to one of them,
+    reads the `system.peers` table, and then reads `system.peers` on each peer it found. The connections use TLS and
+    the AWS SigV4 authentication with the agent's credentials.
+* **It polls CloudWatch** (the `AWS/Cassandra` namespace):
+
+  | Data | Interval |
+  |------|----------|
+  | Consumed read and write capacity | 1 minute |
+  | p99 latency and number of successful requests, for the `SELECT`, `INSERT`, `UPDATE`, `DELETE` and `BATCH` operations that have traffic | 5 minutes |
+  | Table size | 1 hour |
+  | Rejected requests: hot partitions, throttling, invalid requests, system errors and the per-connection limit | 1 minute |
+
+  The agent reads only the error series that CloudWatch reports as active in the last 3 hours. Every value ends
+  2 to 3 minutes in the past, because CloudWatch publishes data late. Rejected requests are counted over 5 minutes.
+
+Coroot shows each AWS account and region as one application, named `<account ID>-<region>`, with the
+[Keyspaces inspection](/inspections/keyspaces). The application has no nodes, so it has no CPU or memory data.
+
+Limitations:
+
+* The China regions (`amazonaws.com.cn`) are not supported.
+* The account-level CloudWatch series have no table, so the tag filters don't apply to them.
+* When the agent resolves the regional name to public addresses, the Keyspaces application raises the
+  [Publicly Exposed Databases](/risks/overview#publicly-exposed-databases) risk. A VPC interface endpoint with private
+  DNS in the VPC of the agent clears it.
 
 ## Database credentials
 
@@ -151,6 +223,8 @@ spec:
   clusterAgent:
     aws:
       rdsTagFilters: {team: payments}
+      keyspacesEnabled: true
+      keyspacesTagFilters: {team: payments}
     databases:
       - type: postgres
         rds: my-db
@@ -172,8 +246,10 @@ integration is configured or changed, followed by a discovery summary:
 
 ```
 AWS integration: region=us-east-1, credentials=CredentialsEndpointProvider, identity=arn:aws:sts::123456789012:assumed-role/coroot-cluster-agent/...
-AWS discovery (region=us-east-1): 3 RDS instances, 2 ElastiCache nodes
+AWS discovery (region=us-east-1): 3 RDS instances, 2 ElastiCache nodes, 4 Keyspaces tables
 ```
+
+The `Keyspaces tables` count is shown only when Keyspaces monitoring is enabled.
 
 `CredentialsEndpointProvider` means EKS Pod Identity, `WebIdentityCredentials` means IRSA, `EC2RoleProvider` means the
 instance profile, and `StaticCredentials` means the key from the integration settings. Discovery errors are shown on
