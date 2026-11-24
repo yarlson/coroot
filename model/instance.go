@@ -63,6 +63,7 @@ type Instance struct {
 	OCIDB       *OCIDB
 	OCICache    *OCICache
 	Elasticache *Elasticache
+	Keyspaces   *Keyspaces
 
 	Jvms   map[string]*Jvm
 	DotNet map[string]*DotNet
@@ -130,6 +131,9 @@ func (instance *Instance) ApplicationTypes() map[ApplicationType]bool {
 		res[t] = true
 	}
 	if t := instance.OCICache.ApplicationType(); t != ApplicationTypeUnknown {
+		res[t] = true
+	}
+	if t := instance.Keyspaces.ApplicationType(); t != ApplicationTypeUnknown {
 		res[t] = true
 	}
 	return res

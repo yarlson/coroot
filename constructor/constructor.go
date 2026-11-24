@@ -151,6 +151,8 @@ func (c *Constructor) loadProjectWorld(ctx context.Context, cache Cache, project
 	prof.stage("load_gcp", func() { c.loadGCP(w, metrics, pjs, cloudInstancesById) })
 	prof.stage("load_oci_metadata", func() { c.loadOCIMetadata(w, metrics, cloudInstancesById, project) })
 	prof.stage("load_oci", func() { c.loadOCI(w, metrics, pjs, cloudInstancesById) })
+	prof.stage("load_keyspaces_metadata", func() { c.loadKeyspacesMetadata(w, metrics, cloudInstancesById, project) })
+	prof.stage("load_keyspaces", func() { loadKeyspaces(metrics, cloudInstancesById) })
 	prof.stage("load_fargate_containers", func() { loadFargateContainers(w, metrics, pjs) })
 	prof.stage("load_containers", func() { c.loadContainers(w, metrics, pjs, nodes, containers, servicesByClusterIP, ip2fqdn, project) })
 	prof.stage("load_app_to_app_connections", func() { c.loadAppToAppConnections(w, metrics, fqdn2ip, project) })
@@ -254,6 +256,9 @@ func (c *Constructor) queryCache(ctx context.Context, cache Cache, project *db.P
 		addQuery(qRecordingRuleApplicationL7InboundRequests, qRecordingRuleApplicationL7InboundRequests, qRecordingRuleApplicationL7InboundRequests, true, nil)
 		addQuery(qRecordingRuleApplicationL7InboundHistogram, qRecordingRuleApplicationL7InboundHistogram, qRecordingRuleApplicationL7InboundHistogram, true, nil)
 		addQuery(qRecordingRuleApplicationLLMInboundHistogram, qRecordingRuleApplicationLLMInboundHistogram, qRecordingRuleApplicationLLMInboundHistogram, true, nil)
+	}
+	for _, name := range keyspacesSLIQueries {
+		addQuery(name, name, name, true, nil)
 	}
 	for appId := range checkConfigs {
 		qName := fmt.Sprintf("%s/%s/", qApplicationCustomSLI, appId)

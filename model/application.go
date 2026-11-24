@@ -210,6 +210,8 @@ func (app *Application) Labels() Labels {
 		res["db"] = app.Instances[0].OCIDB.Engine.Value() + " (OCI)"
 	case ApplicationKindOCICache:
 		res["db"] = app.Instances[0].OCICache.Engine.Value() + " (OCI Cache)"
+	case ApplicationKindKeyspaces:
+		res["db"] = "cassandra (Keyspaces)"
 	case ApplicationKindUnknown, ApplicationKindDockerSwarmService, ApplicationKindNomadJobGroup, ApplicationKindECSService:
 		if app.Id.Namespace != "_" {
 			res["ns"] = app.Id.Namespace
@@ -347,7 +349,7 @@ func (app *Application) IsStandalone() bool {
 
 func (app *Application) IsDatabase() bool {
 	switch app.Id.Kind {
-	case ApplicationKindRds, ApplicationKindElasticacheCluster, ApplicationKindCloudSQL, ApplicationKindMemorystore, ApplicationKindOCIDB, ApplicationKindOCICache:
+	case ApplicationKindRds, ApplicationKindElasticacheCluster, ApplicationKindCloudSQL, ApplicationKindMemorystore, ApplicationKindOCIDB, ApplicationKindOCICache, ApplicationKindKeyspaces:
 		return true
 	}
 	for t := range app.ApplicationTypes() {
@@ -425,6 +427,8 @@ func (app *Application) ApplicationTypes() map[ApplicationType]bool {
 					t = ApplicationTypeMemcached
 				case "27017", "27018":
 					t = ApplicationTypeMongodb
+				case "9042", "9142":
+					t = ApplicationTypeCassandra
 				}
 				if t != "" {
 					res[t] = true

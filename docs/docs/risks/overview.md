@@ -113,6 +113,9 @@ Coroot already collects data about Kubernetes Services, so we’ve covered those
 Of course, some databases are intentionally exposed, for example, when access is controlled via firewalls, AWS Security Groups, 
 or built-in database security mechanisms. If that’s the case, you can simply dismiss the risk.
 
+[Amazon Keyspaces](/databases/keyspaces) also raises this risk when the cluster-agent resolves its regional endpoint to public addresses.
+To clear it, create a VPC interface endpoint with private DNS in the VPC of the cluster-agent.
+
 ## Dismissing risks
 
 If a risk isn’t relevant, you can dismiss it by clicking the three-dot menu next to the risk:

@@ -22,6 +22,8 @@ func (c *Constructor) loadSLIs(w *model.World, metrics map[string][]*model.Metri
 	builtinLatencyRaw := builtinLatency(w, metrics[qRecordingRuleApplicationL7Histogram+"_raw"], project)
 	llmLatencyAgg := inboundLatency(w, metrics[qRecordingRuleApplicationLLMInboundHistogram+"_avg"], project)
 	llmLatencyRaw := inboundLatency(w, metrics[qRecordingRuleApplicationLLMInboundHistogram+"_raw"], project)
+	keyspacesAvailabilityAgg := keyspacesAvailability(w, metrics, "_avg")
+	keyspacesAvailabilityRaw := keyspacesAvailability(w, metrics, "_raw")
 
 	customAvailabilityAgg := map[model.ApplicationId]availabilitySlis{}
 	customAvailabilityRaw := map[model.ApplicationId]availabilitySlis{}
@@ -49,6 +51,12 @@ func (c *Constructor) loadSLIs(w *model.World, metrics map[string][]*model.Metri
 			if !ok || agg.total.IsEmpty() {
 				agg = builtinAvailabilityAgg[app.Id]
 				raw = builtinAvailabilityRaw[app.Id]
+			}
+			if agg.total.IsEmpty() {
+				if ks, ok := keyspacesAvailabilityAgg[app.Id]; ok {
+					agg = ks
+					raw = keyspacesAvailabilityRaw[app.Id]
+				}
 			}
 			if agg.failed.IsEmpty() {
 				agg.failed = agg.total.WithNewValue(timeseries.NaN)
@@ -186,6 +194,110 @@ func loadCustomSLIs(metrics map[string][]*model.MetricValues,
 			latencyRaw[appId] = histogramBuckets(buckets)
 		}
 	}
+}
+
+var keyspacesSLIQueries = []string{"aws_keyspaces_table_requests", "aws_keyspaces_table_errors", "aws_keyspaces_account_errors"}
+
+// clients that eBPF cannot see in plaintext (Java async SSLEngine, Node.js TLS) leave a Keyspaces application without
+// request metrics, so its availability falls back to CloudWatch. AWS counts one rejection in several metrics:
+// a table rejection is the larger of its UserErrors and its throttle events, and an account-level EXECUTE rejection is
+// the larger of the account UserErrors and the per-connection limit events. PREPARE errors are client mistakes.
+func keyspacesAvailability(w *model.World, metrics map[string][]*model.MetricValues, suffix string) map[model.ApplicationId]availabilitySlis {
+	appsByKeyspacesId := map[string]model.ApplicationId{}
+	for _, app := range w.Applications {
+		for _, i := range app.Instances {
+			if k := i.Keyspaces; k != nil {
+				appsByKeyspacesId[k.Id] = app.Id
+			}
+		}
+	}
+	if len(appsByKeyspacesId) == 0 {
+		return nil
+	}
+	type tableKey struct {
+		id, keyspace, table string
+	}
+	type perTable struct {
+		user, throttles *timeseries.Aggregate
+	}
+	type perAccount struct {
+		good, system, perConnection, execute *timeseries.Aggregate
+	}
+	tables := map[tableKey]*perTable{}
+	accounts := map[string]*perAccount{}
+	account := func(id string) *perAccount {
+		a := accounts[id]
+		if a == nil {
+			a = &perAccount{
+				good:          timeseries.NewAggregate(timeseries.NanSum),
+				system:        timeseries.NewAggregate(timeseries.NanSum),
+				perConnection: timeseries.NewAggregate(timeseries.NanSum),
+				execute:       timeseries.NewAggregate(timeseries.NanSum),
+			}
+			accounts[id] = a
+		}
+		return a
+	}
+	table := func(m *model.MetricValues) *perTable {
+		key := tableKey{id: m.Labels["keyspaces_id"], keyspace: m.Labels["keyspace"], table: m.Labels["table"]}
+		account(key.id)
+		t := tables[key]
+		if t == nil {
+			t = &perTable{user: timeseries.NewAggregate(timeseries.NanSum), throttles: timeseries.NewAggregate(timeseries.NanSum)}
+			tables[key] = t
+		}
+		return t
+	}
+	for _, m := range metrics["aws_keyspaces_table_requests"+suffix] {
+		account(m.Labels["keyspaces_id"]).good.Add(m.Values)
+	}
+	for _, m := range metrics["aws_keyspaces_table_errors"+suffix] {
+		switch m.Labels["type"] {
+		case model.KeyspacesErrorUser:
+			table(m).user.Add(m.Values)
+		case model.KeyspacesErrorReadThrottle, model.KeyspacesErrorWriteThrottle:
+			table(m).throttles.Add(m.Values)
+		case model.KeyspacesErrorSystem:
+			account(m.Labels["keyspaces_id"]).system.Add(m.Values)
+		}
+	}
+	for _, m := range metrics["aws_keyspaces_account_errors"+suffix] {
+		a := account(m.Labels["keyspaces_id"])
+		switch {
+		case m.Labels["type"] == model.KeyspacesErrorPerConnectionLimit:
+			a.perConnection.Add(m.Values)
+		case m.Labels["type"] == model.KeyspacesErrorUser && m.Labels["operation"] == model.KeyspacesOperationExecute:
+			a.execute.Add(m.Values)
+		}
+	}
+
+	failedByAccount := map[string]*timeseries.Aggregate{}
+	for key, t := range tables {
+		if failedByAccount[key.id] == nil {
+			failedByAccount[key.id] = timeseries.NewAggregate(timeseries.NanSum)
+		}
+		failedByAccount[key.id].Add(timeseries.NewAggregate(timeseries.Max).Add(t.user.Get(), t.throttles.Get()).Get())
+	}
+	perSecond := func(ts *timeseries.TimeSeries) *timeseries.TimeSeries {
+		return ts.Map(func(t timeseries.Time, v float32) float32 { return v / float32(model.KeyspacesErrorsWindow) })
+	}
+	res := map[model.ApplicationId]availabilitySlis{}
+	for id, a := range accounts {
+		appId, ok := appsByKeyspacesId[id]
+		if !ok {
+			continue
+		}
+		failed := timeseries.NewAggregate(timeseries.NanSum).Add(
+			timeseries.NewAggregate(timeseries.Max).Add(a.execute.Get(), a.perConnection.Get()).Get(),
+			a.system.Get(),
+		)
+		if f := failedByAccount[id]; f != nil {
+			failed.Add(f.Get())
+		}
+		total := timeseries.NewAggregate(timeseries.NanSum).Add(a.good.Get(), failed.Get())
+		res[appId] = availabilitySlis{total: perSecond(total.Get()), failed: perSecond(failed.Get())}
+	}
+	return res
 }
 
 type availabilitySlis struct {
