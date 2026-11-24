@@ -115,6 +115,8 @@ func (at ApplicationType) AuditReport() AuditReportName {
 		return AuditReportMongodb
 	case ApplicationTypeMemcached:
 		return AuditReportMemcached
+	case ApplicationTypeCassandra:
+		return AuditReportKeyspaces
 	case ApplicationTypeJava:
 		return AuditReportJvm
 	case ApplicationTypeDotNet:

@@ -1026,6 +1026,74 @@ func BuiltinAlertingRules() []AlertingRule {
 			Builtin: true,
 		},
 		{
+			Id:   "keyspaces-hot-partition",
+			Name: "Keyspaces hot partitions",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesHotPartition.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "Amazon Keyspaces rejects requests to a partition that exceeds its throughput limit. Spread the traffic across more partition keys.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
+			Id:   "keyspaces-throttling",
+			Name: "Keyspaces throttling",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesThrottling.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "Amazon Keyspaces throttles requests to a table. Raise the provisioned capacity or enable auto scaling. For an on-demand table, the traffic exceeded the warm throughput or the previous peak.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
+			Id:   "keyspaces-per-connection-limit",
+			Name: "Keyspaces per-connection limit",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesConnectionLimit.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "Amazon Keyspaces rejects requests that exceed the per-connection request rate limit. Raise the number of connections per host in the CQL driver.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
+			Id:   "keyspaces-system-errors",
+			Name: "Keyspaces system errors",
+			Source: AlertSource{
+				Type:  AlertSourceTypeCheck,
+				Check: &CheckSource{CheckId: Checks.KeyspacesSystemErrors.Id},
+			},
+			Selector:      AppSelector{Type: AppSelectorTypeAll},
+			Severity:      WARNING,
+			For:           2 * timeseries.Minute,
+			KeepFiringFor: 5 * timeseries.Minute,
+			Templates: AlertTemplates{
+				Description: "Amazon Keyspaces returns system errors. Check the AWS Health Dashboard.",
+			},
+			Enabled: true,
+			Builtin: true,
+		},
+		{
 			Id:   "kubernetes-events",
 			Name: "Kubernetes events",
 			Source: AlertSource{

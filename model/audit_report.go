@@ -25,6 +25,7 @@ const (
 	AuditReportMongodb     AuditReportName = "Mongodb"
 	AuditReportMemcached   AuditReportName = "Memcached"
 	AuditReportMysql       AuditReportName = "Mysql"
+	AuditReportKeyspaces   AuditReportName = "Keyspaces"
 	AuditReportJvm         AuditReportName = "JVM"
 	AuditReportDotNet      AuditReportName = ".NET"
 	AuditReportPython      AuditReportName = "Python"

@@ -121,6 +121,12 @@ var Checks = struct {
 	MysqlGroupReplication      CheckConfig
 	MysqlLatency               CheckConfig
 	MysqlBackups               CheckConfig
+	KeyspacesHotPartition      CheckConfig
+	KeyspacesThrottling        CheckConfig
+	KeyspacesCapacity          CheckConfig
+	KeyspacesConnectionLimit   CheckConfig
+	KeyspacesSystemErrors      CheckConfig
+	KeyspacesUserErrors        CheckConfig
 }{
 	index: map[CheckId]*CheckConfig{},
 
@@ -623,6 +629,55 @@ var Checks = struct {
 		Unit:                    CheckUnitSecond,
 		MessageTemplate:         `backups are failing or stale on {{.Items "mysql cluster"}}`,
 		ConditionFormatTemplate: "no successful backup within <threshold>, the last backup failed, or the scheduled backup is overdue",
+	},
+	KeyspacesHotPartition: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeItemBased,
+		Title:                   "Keyspaces hot partitions",
+		DefaultThreshold:        0,
+		MessageTemplate:         `{{.ItemsWithHave "table"}} hot partitions`,
+		ConditionFormatTemplate: "requests rejected by the partition throughput limit of a table over 5 minutes > <threshold>",
+	},
+	KeyspacesThrottling: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeItemBased,
+		Title:                   "Keyspaces throttling",
+		DefaultThreshold:        0,
+		MessageTemplate:         `{{.ItemsWithToBe "table"}} throttled`,
+		ConditionFormatTemplate: "read and write throttle events of a table over 5 minutes, excluding hot partitions > <threshold>",
+	},
+	KeyspacesCapacity: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeItemBased,
+		Title:                   "Keyspaces provisioned capacity",
+		DefaultThreshold:        80,
+		Unit:                    CheckUnitPercent,
+		MessageTemplate:         `{{.ItemsWithToBe "table"}} close to the provisioned capacity`,
+		ConditionFormatTemplate: "the consumed read or write capacity of a provisioned table > <threshold> of the provisioned capacity",
+	},
+	KeyspacesConnectionLimit: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeItemBased,
+		Title:                   "Keyspaces per-connection limit",
+		DefaultThreshold:        0,
+		MessageTemplate:         `requests are rejected by the per-connection limit`,
+		ConditionFormatTemplate: "requests rejected by the per-connection request rate limit over 5 minutes > <threshold>",
+	},
+	KeyspacesSystemErrors: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeItemBased,
+		Title:                   "Keyspaces system errors",
+		DefaultThreshold:        0,
+		MessageTemplate:         `{{.ItemsWithHave "table"}} AWS-side errors`,
+		ConditionFormatTemplate: "system errors of a table over 5 minutes > <threshold>",
+	},
+	KeyspacesUserErrors: CheckConfig{
+		Category:                AuditReportKeyspaces,
+		Type:                    CheckTypeItemBased,
+		Title:                   "Keyspaces client errors",
+		DefaultThreshold:        0,
+		MessageTemplate:         `invalid requests are rejected ({{.Items "table or statement type"}})`,
+		ConditionFormatTemplate: "invalid requests over 5 minutes, excluding throttling > <threshold>",
 	},
 }
 

@@ -93,6 +93,12 @@ func (a *appAuditor) instances() {
 			default:
 				status.SetStatus(model.OK, i.OCICache.Status.Value())
 			}
+		} else if i.Keyspaces != nil {
+			if i.Keyspaces.IsUp() {
+				status.SetStatus(model.OK, "active")
+			} else {
+				status.SetStatus(model.WARNING, "down (no metrics)")
+			}
 		} else if i.Pod == nil {
 			if i.IsUp() {
 				status.SetStatus(model.OK, "ok")
