@@ -425,6 +425,8 @@ func (app *Application) ApplicationTypes() map[ApplicationType]bool {
 					t = ApplicationTypeMemcached
 				case "27017", "27018":
 					t = ApplicationTypeMongodb
+				case "9042", "9142":
+					t = ApplicationTypeCassandra
 				}
 				if t != "" {
 					res[t] = true

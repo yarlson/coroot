@@ -37,6 +37,8 @@ func (p Protocol) ToApplicationType() ApplicationType {
 		return ApplicationTypeMysql
 	case ProtocolMemcached:
 		return ApplicationTypeMemcached
+	case ProtocolCassandra:
+		return ApplicationTypeCassandra
 	}
 	return ApplicationTypeUnknown
 }
