@@ -257,6 +257,9 @@ func (c *Constructor) queryCache(ctx context.Context, cache Cache, project *db.P
 		addQuery(qRecordingRuleApplicationL7InboundHistogram, qRecordingRuleApplicationL7InboundHistogram, qRecordingRuleApplicationL7InboundHistogram, true, nil)
 		addQuery(qRecordingRuleApplicationLLMInboundHistogram, qRecordingRuleApplicationLLMInboundHistogram, qRecordingRuleApplicationLLMInboundHistogram, true, nil)
 	}
+	for _, name := range keyspacesSLIQueries {
+		addQuery(name, name, name, true, nil)
+	}
 	for appId := range checkConfigs {
 		qName := fmt.Sprintf("%s/%s/", qApplicationCustomSLI, appId)
 		availabilityCfg, _ := checkConfigs.GetAvailability(appId)
